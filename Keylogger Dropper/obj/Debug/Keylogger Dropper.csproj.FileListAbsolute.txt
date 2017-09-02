@@ -1,0 +1,8 @@
+c:\users\admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\obj\Debug\Keylogger_Dropper.Properties.Resources.resources
+c:\users\admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\obj\Debug\Keylogger Dropper.csproj.GenerateResource.Cache
+C:\Users\Admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\bin\Debug\Keylogger_Dropper.exe.config
+C:\Users\Admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\obj\Debug\Project_Serenity.Form1.resources
+C:\Users\Admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\bin\Debug\Keylogger_Dropper.exe
+C:\Users\Admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\obj\Debug\Keylogger_Dropper.exe
+C:\Users\Admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\obj\Debug\Keylogger_Dropper.pdb
+C:\Users\Admin\documents\visual studio 2015\Projects\Keylogger Dropper\Keylogger Dropper\bin\Debug\Keylogger_Dropper.pdb
