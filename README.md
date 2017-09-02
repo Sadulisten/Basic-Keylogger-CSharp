@@ -1,6 +1,8 @@
 # Basic-Keylogger-C-
 A basic project showing how to compile pre-generated code into an executable on runtime. More info in readme.
 
+![alt text](https://i.imgur.com/JDi71fo.png)
+
 This uses CODEDOM to compile C# code on the fly.
 The code this project compiles can be found in the projects resources (in a file called 'source.txt')
 
