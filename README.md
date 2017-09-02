@@ -11,3 +11,6 @@ Features:
 WARNING: Might show up as a virus by your antivirus.
 This is due to this projects ability to send stuff via EMAIL (thats how this transmits captured logs to a host computer at a set interval)
 
+I DO NOT TAKE RESPONSIBILITY FOR HOW THIS IS USED!
+THE PURPOSE OF THIS WAS SIMPLY TO SHOW HOW ITS DONE AND HOW IT WORKS.
+
